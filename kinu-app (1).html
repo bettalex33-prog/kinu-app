@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Kinu App</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Unbounded:wght@300;700;900&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --cyan: #00f5ff;
+    --magenta: #ff00c8;
+    --bg: #050508;
+    --surface: rgba(10,10,20,0.92);
+    --border: rgba(0,245,255,0.15);
+    --text: #e0e8ff;
+    --dim: rgba(224,232,255,0.4);
+  }
+
+  html, body {
+    width: 100%; height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Space Mono', monospace;
+    overflow: hidden;
+  }
+
+  #canvas {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    display: block;
+  }
+
+  /* ── HUD ── */
+  #hud {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    background: linear-gradient(to bottom, rgba(5,5,8,0.85) 0%, transparent 100%);
+    pointer-events: none;
+  }
+
+  #logo {
+    font-family: 'Unbounded', sans-serif;
+    font-weight: 900;
+    font-size: 1.1rem;
+    letter-spacing: 0.12em;
+    background: linear-gradient(90deg, var(--cyan), var(--magenta));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  #preset-name {
+    font-size: 0.65rem;
+    color: var(--dim);
+    letter-spacing: 0.08em;
+    max-width: 50%;
+    text-align: center;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* ── Controls bar ── */
+  #controls {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 20px 16px 28px;
+    background: linear-gradient(to top, rgba(5,5,8,0.9) 0%, transparent 100%);
+    flex-wrap: wrap;
+  }
+
+  .btn {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 10px 18px;
+    border-radius: 40px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
+    font-family: 'Space Mono', monospace;
+    font-size: 0.7rem;
+    letter-spacing: 0.06em;
+    cursor: pointer;
+    transition: all 0.2s;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    white-space: nowrap;
+  }
+
+  .btn:hover { border-color: var(--cyan); color: var(--cyan); }
+  .btn.active { border-color: var(--cyan); color: var(--cyan); box-shadow: 0 0 16px rgba(0,245,255,0.25); }
+  .btn.danger.active { border-color: var(--magenta); color: var(--magenta); box-shadow: 0 0 16px rgba(255,0,200,0.25); }
+
+  .btn svg { width: 14px; height: 14px; flex-shrink: 0; }
+
+  #file-input { display: none; }
+
+  /* ── Preset Panel ── */
+  #preset-panel {
+    position: fixed;
+    top: 0; right: 0;
+    width: min(320px, 100vw);
+    height: 100%;
+    z-index: 20;
+    background: var(--surface);
+    border-left: 1px solid var(--border);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    transform: translateX(100%);
+    transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+    display: flex;
+    flex-direction: column;
+  }
+
+  #preset-panel.open { transform: translateX(0); }
+
+  #panel-header {
+    padding: 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+  }
+
+  #panel-header h2 {
+    font-family: 'Unbounded', sans-serif;
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.15em;
+    color: var(--cyan);
+  }
+
+  #close-panel {
+    background: none;
+    border: none;
+    color: var(--dim);
+    cursor: pointer;
+    font-size: 1.2rem;
+    padding: 4px 8px;
+    line-height: 1;
+    transition: color 0.2s;
+  }
+  #close-panel:hover { color: var(--text); }
+
+  #search-box {
+    margin: 12px 16px;
+    padding: 10px 14px;
+    background: rgba(0,245,255,0.05);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    font-family: 'Space Mono', monospace;
+    font-size: 0.7rem;
+    width: calc(100% - 32px);
+    outline: none;
+    flex-shrink: 0;
+    transition: border-color 0.2s;
+  }
+  #search-box:focus { border-color: rgba(0,245,255,0.4); }
+  #search-box::placeholder { color: var(--dim); }
+
+  #preset-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 4px 8px 24px;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+  }
+
+  #preset-list::-webkit-scrollbar { width: 4px; }
+  #preset-list::-webkit-scrollbar-track { background: transparent; }
+  #preset-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .preset-item {
+    padding: 10px 12px;
+    border-radius: 6px;
+    font-size: 0.62rem;
+    letter-spacing: 0.04em;
+    color: var(--dim);
+    cursor: pointer;
+    transition: all 0.15s;
+    line-height: 1.4;
+    word-break: break-word;
+    border: 1px solid transparent;
+  }
+
+  .preset-item:hover { background: rgba(0,245,255,0.06); color: var(--text); }
+  .preset-item.active { background: rgba(0,245,255,0.1); color: var(--cyan); border-color: rgba(0,245,255,0.2); }
+
+  /* ── Splash ── */
+  #splash {
+    position: fixed;
+    inset: 0;
+    z-index: 30;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg);
+    gap: 12px;
+    transition: opacity 0.6s;
+  }
+
+  #splash h1 {
+    font-family: 'Unbounded', sans-serif;
+    font-weight: 900;
+    font-size: clamp(2.5rem, 10vw, 5rem);
+    background: linear-gradient(135deg, var(--cyan) 0%, var(--magenta) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    letter-spacing: -0.02em;
+  }
+
+  #splash p {
+    font-size: 0.7rem;
+    color: var(--dim);
+    letter-spacing: 0.1em;
+  }
+
+  #splash-btn {
+    margin-top: 24px;
+    padding: 14px 36px;
+    border-radius: 40px;
+    border: 1px solid var(--cyan);
+    background: rgba(0,245,255,0.08);
+    color: var(--cyan);
+    font-family: 'Unbounded', sans-serif;
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  #splash-btn:hover { background: rgba(0,245,255,0.18); box-shadow: 0 0 32px rgba(0,245,255,0.3); }
+
+  /* ── Loading indicator ── */
+  #loading {
+    position: fixed;
+    inset: 0;
+    z-index: 25;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    background: rgba(5,5,8,0.7);
+    font-size: 0.7rem;
+    letter-spacing: 0.1em;
+    color: var(--cyan);
+  }
+
+  /* ── Audio info bar ── */
+  #audio-info {
+    position: fixed;
+    top: 60px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 10;
+    font-size: 0.6rem;
+    letter-spacing: 0.08em;
+    color: var(--magenta);
+    opacity: 0;
+    transition: opacity 0.4s;
+    pointer-events: none;
+    white-space: nowrap;
+  }
+  #audio-info.show { opacity: 1; }
+
+  @media (max-width: 480px) {
+    #controls { gap: 8px; padding: 14px 10px 22px; }
+    .btn { padding: 9px 13px; font-size: 0.65rem; }
+    #preset-panel { width: 100vw; }
+  }
+</style>
+</head>
+<body>
+
+<canvas id="canvas"></canvas>
+
+<!-- Splash -->
+<div id="splash">
+  <h1>KINU</h1>
+  <p>MUSIC VISUALIZER</p>
+  <button id="splash-btn">ENTER</button>
+</div>
+
+<!-- Loading -->
+<div id="loading">LOADING PRESETS...</div>
+
+<!-- HUD -->
+<div id="hud">
+  <div id="logo">KINU</div>
+  <div id="preset-name">—</div>
+  <div style="width:60px"></div>
+</div>
+
+<!-- Audio info -->
+<div id="audio-info" id="audio-info"></div>
+
+<!-- Controls -->
+<div id="controls">
+  <button class="btn" id="btn-mic">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+    MIC
+  </button>
+
+  <label class="btn" for="file-input">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+    AUDIO FILE
+  </label>
+  <input type="file" id="file-input" accept="audio/*">
+
+  <button class="btn" id="btn-prev">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+    PREV
+  </button>
+
+  <button class="btn" id="btn-next">
+    NEXT
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+  </button>
+
+  <button class="btn" id="btn-presets">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+    PRESETS
+  </button>
+
+  <button class="btn" id="btn-fs">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+    FULLSCREEN
+  </button>
+</div>
+
+<!-- Preset Panel -->
+<div id="preset-panel">
+  <div id="panel-header">
+    <h2>PRESETS</h2>
+    <button id="close-panel">✕</button>
+  </div>
+  <input type="text" id="search-box" placeholder="Search presets...">
+  <div id="preset-list"></div>
+</div>
+
+<script src="https://unpkg.com/butterchurn@2.6.7/lib/butterchurn.min.js"></script>
+<script src="https://unpkg.com/butterchurn-presets@2.4.7/lib/butterchurn-presets.min.js"></script>
+<script>
+let visualizer = null;
+let audioCtx = null;
+let sourceNode = null;
+let micStream = null;
+let animFrame = null;
+let presets = {};
+let presetKeys = [];
+let currentPresetIndex = 0;
+let micActive = false;
+let fileAudio = null;
+
+const canvas = document.getElementById('canvas');
+const presetNameEl = document.getElementById('preset-name');
+const presetListEl = document.getElementById('preset-list');
+const audioInfoEl = document.getElementById('audio-info');
+const loadingEl = document.getElementById('loading');
+
+function resizeCanvas() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+  if (visualizer) visualizer.setRendererSize(canvas.width, canvas.height);
+}
+
+window.addEventListener('resize', resizeCanvas);
+resizeCanvas();
+
+function showAudioInfo(msg) {
+  audioInfoEl.textContent = msg;
+  audioInfoEl.classList.add('show');
+  setTimeout(() => audioInfoEl.classList.remove('show'), 3000);
+}
+
+function initVisualizer() {
+  if (!audioCtx) return;
+  if (visualizer) return;
+  visualizer = butterchurn.default.createVisualizer(audioCtx, canvas, {
+    width: canvas.width,
+    height: canvas.height,
+    pixelRatio: window.devicePixelRatio || 1,
+    textureRatio: 1
+  });
+  loadPreset(currentPresetIndex);
+  renderLoop();
+}
+
+function renderLoop() {
+  if (visualizer) visualizer.render();
+  animFrame = requestAnimationFrame(renderLoop);
+}
+
+function loadPreset(index) {
+  if (!visualizer || presetKeys.length === 0) return;
+  currentPresetIndex = ((index % presetKeys.length) + presetKeys.length) % presetKeys.length;
+  const key = presetKeys[currentPresetIndex];
+  visualizer.loadPreset(presets[key], 1.5);
+  presetNameEl.textContent = key;
+  document.querySelectorAll('.preset-item').forEach((el, i) => {
+    el.classList.toggle('active', i === currentPresetIndex);
+  });
+  // Scroll active item into view
+  const active = presetListEl.querySelector('.preset-item.active');
+  if (active) active.scrollIntoView({ block: 'nearest' });
+}
+
+function connectSource(node) {
+  if (sourceNode) { try { sourceNode.disconnect(); } catch(e){} }
+  sourceNode = node;
+  if (visualizer) visualizer.connectAudio(sourceNode);
+}
+
+// ── Mic ──
+document.getElementById('btn-mic').addEventListener('click', async () => {
+  if (micActive) {
+    if (micStream) { micStream.getTracks().forEach(t => t.stop()); micStream = null; }
+    micActive = false;
+    document.getElementById('btn-mic').classList.remove('active');
+    showAudioInfo('MIC OFF');
+    return;
+  }
+  try {
+    if (!audioCtx) { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
+    if (audioCtx.state === 'suspended') await audioCtx.resume();
+    micStream = await navigator.mediaDevices.getUserMedia({ 
+      audio: { 
+        echoCancellation: false, 
+        noiseSuppression: false, 
+        autoGainControl: false,
+        googDucking: false,
+        googAutoGainControl: false,
+        googNoiseSuppression: false,
+        googEchoCancellation: false
+      }, 
+      video: false 
+    });
+    const micSource = audioCtx.createMediaStreamSource(micStream);
+    connectSource(micSource);
+    initVisualizer();
+    micActive = true;
+    document.getElementById('btn-mic').classList.add('active');
+    showAudioInfo('🎤 MIC ACTIVE');
+  } catch(e) {
+    alert('Mic access denied or unavailable.');
+  }
+});
+
+// ── File ──
+document.getElementById('file-input').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  if (!audioCtx) { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
+  if (audioCtx.state === 'suspended') await audioCtx.resume();
+  if (fileAudio) { fileAudio.pause(); fileAudio.src = ''; }
+  fileAudio = new Audio();
+  fileAudio.src = URL.createObjectURL(file);
+  fileAudio.crossOrigin = 'anonymous';
+  const mediaSource = audioCtx.createMediaElementSource(fileAudio);
+  mediaSource.connect(audioCtx.destination);
+  connectSource(mediaSource);
+  initVisualizer();
+  fileAudio.play();
+  document.getElementById('btn-mic').classList.remove('active');
+  micActive = false;
+  showAudioInfo('♪ ' + file.name);
+  e.target.value = '';
+});
+
+// ── Prev / Next ──
+document.getElementById('btn-prev').addEventListener('click', () => loadPreset(currentPresetIndex - 1));
+document.getElementById('btn-next').addEventListener('click', () => loadPreset(currentPresetIndex + 1));
+
+// ── Preset panel ──
+const panel = document.getElementById('preset-panel');
+document.getElementById('btn-presets').addEventListener('click', () => panel.classList.toggle('open'));
+document.getElementById('close-panel').addEventListener('click', () => panel.classList.remove('open'));
+
+function buildPresetList(filter = "") {
+  presetListEl.innerHTML = "";
+  if (presetKeys.length === 0) {
+    const msg = document.createElement("div");
+    msg.style.cssText = "padding:20px;color:var(--dim);font-size:0.65rem;text-align:center;";
+    msg.textContent = "Click ENTER on splash to load presets.";
+    presetListEl.appendChild(msg);
+    return;
+  }
+  const lc = filter.toLowerCase();
+  let count = 0;
+  presetKeys.forEach((key, i) => {
+    if (lc && !key.toLowerCase().includes(lc)) return;
+    count++;
+    const div = document.createElement("div");
+    div.className = "preset-item" + (i === currentPresetIndex ? " active" : "");
+    div.textContent = key;
+    div.dataset.index = i;
+    div.addEventListener("click", () => {
+      loadPreset(parseInt(div.dataset.index));
+      if (window.innerWidth < 600) panel.classList.remove("open");
+    });
+    presetListEl.appendChild(div);
+  });
+  if (lc && count === 0) {
+    const msg = document.createElement("div");
+    msg.style.cssText = "padding:20px;color:var(--dim);font-size:0.65rem;text-align:center;";
+    msg.textContent = "No presets found.";
+    presetListEl.appendChild(msg);
+  }
+}
+
+document.getElementById('search-box').addEventListener('input', (e) => buildPresetList(e.target.value));
+
+// ── Fullscreen ──
+document.getElementById('btn-fs').addEventListener('click', () => {
+  if (!document.fullscreenElement) {
+    document.documentElement.requestFullscreen().catch(() => {});
+  } else {
+    document.exitFullscreen();
+  }
+});
+
+// ── Splash ──
+document.getElementById('splash-btn').addEventListener('click', async () => {
+  const splash = document.getElementById('splash');
+  splash.style.opacity = '0';
+  setTimeout(() => splash.style.display = 'none', 600);
+  loadingEl.style.display = 'flex';
+  // Load presets
+  await new Promise(r => setTimeout(r, 100));
+  try {
+    presets = butterchurnPresets.getPresets();
+    presetKeys = Object.keys(presets).sort();
+    buildPresetList();
+    // Init audio context for visualization (no audio yet)
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    visualizer = butterchurn.default.createVisualizer(audioCtx, canvas, {
+      width: canvas.width,
+      height: canvas.height,
+      pixelRatio: window.devicePixelRatio || 1,
+    });
+    currentPresetIndex = Math.floor(Math.random() * presetKeys.length);
+    loadPreset(currentPresetIndex);
+    renderLoop();
+  } catch(e) {
+    console.error(e);
+  }
+  loadingEl.style.display = 'none';
+});
+
+// Keyboard shortcuts
+window.addEventListener('keydown', (e) => {
+  if (e.target.tagName === 'INPUT') return;
+  if (e.key === 'ArrowRight' || e.key === 'n') loadPreset(currentPresetIndex + 1);
+  if (e.key === 'ArrowLeft' || e.key === 'p') loadPreset(currentPresetIndex - 1);
+  if (e.key === 'Escape') panel.classList.remove('open');
+});
+</script>
+</body>
+</html>
